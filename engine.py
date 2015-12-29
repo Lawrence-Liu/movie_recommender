@@ -30,7 +30,7 @@ class RecommendationEngine(object):
             .map(lambda line: line.split(",")).map(lambda tokens: (int(tokens[0]),int(tokens[1]),float(tokens[2]))).cache()
 
         # Load movies data for later use
-        PATTERN = re.compile(r'''((?:[^,"']|"[^"]*"|'[^']*')+)''')
+        PATTERN = re.compile(r'''((?:[^,"]|"[^"]*"|'[^']*')+)''')
         logger.info("Loading Movies data...")
         movies_file_path = os.path.join(dataset_path, 'movies.csv')
         movies_raw_RDD = self.sc.textFile(movies_file_path)
@@ -38,6 +38,7 @@ class RecommendationEngine(object):
         self.movies_RDD = movies_raw_RDD.filter(lambda line: line!=movies_raw_data_header)\
             .map(lambda line: PATTERN.split(line)[1::2]).map(lambda tokens: (int(tokens[0]),tokens[1],(tokens[2].split('|')))).cache()
         self.movies_titles_RDD = self.movies_RDD.map(lambda x: (int(x[0]),x[1])).cache()
+        self.genres = self.movies_RDD.flatMap(lambda tokens: tokens[2]).distinct()
         # Pre-calculate movies ratings counts
         self.__count_and_average_ratings()
 
@@ -100,6 +101,14 @@ class RecommendationEngine(object):
         ratings = self.__predict_ratings(user_unrated_movies_RDD).filter(lambda r: r[2]>=25).takeOrdered(movies_count, key=lambda x: -x[1])
 
         return ratings
+
+    def get_top_ratings_genre(self, user_id, movies_count):
+        """
+        :param user_id:
+        :param movies_count:
+        :return :
+        Recommends up to movies_count top unrated movies to user_id for each genre
+        """
 
     def get_ratings_for_movie_ids(self, user_id, movie_ids):
         """Given a user_id and a list of movie_ids, predict ratings for them
